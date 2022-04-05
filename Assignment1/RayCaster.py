@@ -1,5 +1,5 @@
 """
-@file   : 4.1.py
+@file   : RayCaster.py
 @brief  : a solution for the problem 4.1 in Assignment 1
 @author : Mohamed Hassanin Mohamed
 @data   : 25/03/2022
@@ -13,6 +13,8 @@ BGR_BLUE_COLOR = (255, 0, 0)
 BGR_GREEN_COLOR = (0, 255, 0)
 
 GRAYSCALE_BLACK_COLOR = 0
+
+CM_IN_METER = 100
 
 class RayCaster:
   def __init__(self, map, angle_range=250, angle_accuracy=2, 
@@ -58,7 +60,22 @@ class RayCaster:
     
     return is_collided
 
-  def cast(self, x, y, theta, show_rays=False, show_collided=False):
+  def _calculate_dist(self, p1, p2):
+    """
+    Description: calculate the euclidean distance.
+
+    Input:
+      - p1
+      - p2
+
+    output:
+      - distance
+    """
+    dist = np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    return dist
+
+  def cast(self, x, y, theta, show_rays=False, 
+  show_collided=False, save_results=False):
     """
     Description: Cast a ray.
       
@@ -71,22 +88,30 @@ class RayCaster:
       make the robot look vertically down).
       - show_rays: if True, show the image with the rays shown.
       - show_collided: if True, show the image with the collided points
-      shown. 
+      shown.
+      - save_results: If True, save the measurements in a text file. 
+    
     Output:
-      - measurements
+      - measurements: numpy array for the distances in pixels.
+      The ray that's not collided has a distance of -1
     """
+    
     if show_rays or show_collided:
       img = self.map_bgr.copy()
 
-    measurements = []
+    if save_results:
+      file = open(f'Measurements_theta_{theta}_x_{x}_y_{y}_angle_accuracy_{self.angle_accuracy}.txt', 'w')
     
     start_angle = theta - (self.angle_range // 2)
     end_angle = theta + (self.angle_range // 2)
     start_len = 1
     # from metric unit to the number of pixels 
-    end_len = (self.length_range * 100) // self.pixel_size 
+    end_len = (self.length_range * CM_IN_METER) // self.pixel_size 
     
-    for angle in range(start_angle, end_angle + 1, self.angle_accuracy):
+    # +1 because the measurement from the original pose
+    measurements = np.ones((end_angle-start_angle)//self.angle_accuracy + 1) * -1
+
+    for i, angle in enumerate(range(start_angle, end_angle + 1, self.angle_accuracy)):
       for len in range(start_len, end_len + 1):
         tobe_checked_x = x + int(len * np.cos(np.radians(angle)))
         if not (0 <= tobe_checked_x < self.map_gray.shape[1]):
@@ -99,26 +124,41 @@ class RayCaster:
         tobe_checked = (tobe_checked_x, tobe_checked_y)
         
         if show_rays:
-          cv.circle(img, tobe_checked, 2, BGR_RED_COLOR, -1)
+          cv.circle(img, tobe_checked, 1, BGR_RED_COLOR, -1)
         
         if self._is_collided(tobe_checked): 
-          measurements.append(tobe_checked)
+          measurements[i] = len  
           
           if show_collided:
             cv.circle(img, tobe_checked, 2, BGR_BLUE_COLOR, -1)
           
+          if save_results:
+            file.write(f'theta:{angle}_x:{tobe_checked_x}_y:{tobe_checked_y}_distance:{measurements[i]}\n')
+
           # no need to progress with that ray since it's collided
           break 
-        
+      
+      # save it even it's not collided
+      if save_results and measurements[i] < 0:
+        file.write(f'theta:{angle}_x:{tobe_checked_x}_y:{tobe_checked_y}_distance:{measurements[i]}\n')
+
     if show_rays or show_collided:
       cv.circle(img, (x, y), 2, BGR_GREEN_COLOR, 5)
+
+      if save_results:
+        cv.imwrite(f'Measurements_theta_{theta}_x_{x}_y_{y}_angle_accuracy_{self.angle_accuracy}.png', img)
+
       cv.imshow("Ray Casting", img)
       cv.waitKey(0)
 
+    if save_results:
+      
+      file.close()
+      
     return measurements    
 
 if __name__ == '__main__':
   ray_caster = RayCaster("Assignment_04_Grid_Map.png")
 
   measurements = ray_caster.cast(x=400, y=180, theta=180,
-  show_rays=True, show_collided=True)
+  show_rays=True, show_collided=True, save_results=True)
